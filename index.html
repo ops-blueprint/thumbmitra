@@ -1,0 +1,120 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ThumbGen</title>
+<style>
+  :root{--bg:#101418;--panel:#181e24;--ink:#e8e4da;--dim:#7d8791;--acc:#e0b64f;--line:#242c34}
+  *{box-sizing:border-box;margin:0}
+  body{background:var(--bg);color:var(--ink);font:15px/1.5 "Segoe UI",system-ui,sans-serif;max-width:1040px;margin:0 auto;padding:28px 16px}
+  h1{font-size:22px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:2px}
+  h1 b{color:var(--acc)}
+  .sub{color:var(--dim);font-size:13px;margin-bottom:22px}
+  form{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;display:grid;gap:12px}
+  label{font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;display:block;margin-bottom:4px}
+  input[type=text],select{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:6px;color:var(--ink);padding:9px 10px;font:inherit}
+  .row{display:grid;grid-template-columns:1.2fr 1fr 200px 70px;gap:12px}
+  @media(max-width:700px){.row{grid-template-columns:1fr}}
+  #custom{display:none}
+  input[type=file]{color:var(--dim);font-size:13px}
+  button{background:var(--acc);color:#141414;border:0;border-radius:6px;padding:11px;font:600 14px/1 inherit;letter-spacing:.06em;cursor:pointer}
+  button:disabled{opacity:.5;cursor:wait}
+  #status{color:var(--dim);font-size:13px;min-height:18px}
+  #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;margin-top:20px}
+  figure{background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  figure img{width:100%;aspect-ratio:16/9;object-fit:cover;display:block;background:#000}
+  figure a{display:block;text-align:center;color:var(--acc);font-size:13px;padding:7px;text-decoration:none}
+</style>
+
+<h1>Thumb<b>Gen</b></h1>
+<div class="sub">Consistent YouTube thumbnails — pick a channel style or upload a reference. Free via Pollinations.</div>
+
+<form onsubmit="return false">
+  <div class="row">
+    <div><label>Video title / topic</label><input type="text" id="topic" placeholder="e.g. Gong farmer — the worst job in medieval history"></div>
+    <div><label>Hook text on image (optional)</label><input type="text" id="hook" placeholder="e.g. IT ONLY GOT WORSE"></div>
+    <div><label>Style</label><select id="style"></select></div>
+    <div><label>Count</label><input type="text" id="count" value="3"></div>
+  </div>
+  <div id="custom"><label>Reference thumbnail (your style example)</label><input type="file" id="ref" accept="image/*"></div>
+  <button id="go">Generate</button>
+  <div id="status"></div>
+</form>
+<div id="grid"></div>
+
+<script>
+// Publishable key (pk_...) from enter.pollinations.ai — safe in client-side code per their docs.
+const API_KEY = "sk_QLEUiwvrqFwAGmvFhWUfX1D0bUNqjioM";
+
+// Model for generation. // ponytail: switch to "nanobanana" or "seedream" if flux garbles the text.
+const MODEL = "seedream";
+
+// Styles distilled from your reference thumbnails. Edit freely — one line per style.
+const STYLES = {
+  "Vintage Comic Panels":   "vintage comic style on aged cream parchment background, two side-by-side panels showing before and after, thick black ink outlines, muted earthy colors, a huge red arrow with black outline pointing from left panel to right panel, bold black condensed title text at top, tiny screaming cartoon face beside the title",
+  "Dark Cartoon Scene":     "dark detailed cartoon scene filling the whole frame, characters with oversized round white faces, tiny dot eyes and huge screaming mouths, grimy textured background with moody lighting, a large distressed red arrow, stacked bold title text in white and blood-red brush lettering on black",
+  "Split Before/After":     "split-screen thumbnail divided diagonally, left half bright and cheerful with a happy cartoon worker, right half dark and ominous showing the grim outcome, giant yellow and white bold outlined title text across the top, red arrow with yellow outline pointing left to right, shocked cartoon reaction face in the corner, thick black outlines",
+  "Stickman Big Title":     "shocked cartoon stickman with round white head and messy brown hair on the left clutching his face, huge stacked title text in center with yellow and white words with black outline, illustrated dramatic scene on the right, red banner with white text and big red arrow near the bottom, teal-blue background",
+  "Painterly History Split":"dramatic painterly split thumbnail, two realistic oil-painting style historical figures facing off on opposite halves with contrasting cold and warm color grading, torn parchment strip dividing the middle, crossed bloodied swords at center, huge distressed numbers and text in red on one side and black on the other",
+  "Minimal Whiteboard":     "minimalist hand-drawn cartoon on plain white background, one detailed expressive character or scene on the right side, casual handwritten black text on the left with a small curved arrow pointing at the subject, restrained muted colors, lots of clean negative space",
+  "Custom (upload reference)": null
+};
+
+const $ = id => document.getElementById(id);
+const sel = $("style");
+for (const k in STYLES) sel.add(new Option(k, k));
+sel.onchange = () => $("custom").style.display = STYLES[sel.value] === null ? "block" : "none";
+
+// Vision-describe the uploaded reference so it works with local files (no hosting needed).
+async function describeRef(file) {
+  const dataUri = await new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file);
+  });
+  const resp = await fetch("https://gen.pollinations.ai/v1/chat/completions", {
+    method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + API_KEY },
+    body: JSON.stringify({ model: "openai", messages: [{ role: "user", content: [
+      { type: "text", text: "Describe this YouTube thumbnail's visual STYLE in one dense sentence for an image generator: palette, lighting, composition, mood, rendering style. Ignore the specific subject and any text." },
+      { type: "image_url", image_url: { url: dataUri } }
+    ]}]})
+  });
+  const d = await resp.json();
+  return d.choices[0].message.content.trim();
+}
+
+async function go() {
+  const topic = $("topic").value.trim();
+  const n = Math.max(3, parseInt($("count").value) || 3); // at least 3
+  if (!topic) return $("status").textContent = "Enter a video title or topic first.";
+  if (API_KEY.includes("PASTE")) return $("status").textContent = "Paste your pk_ key into API_KEY at the top of this file (free at enter.pollinations.ai).";
+  $("go").disabled = true;
+
+  let style = STYLES[sel.value];
+  try {
+    if (style === null) {
+      const f = $("ref").files[0];
+      if (!f) throw new Error("Upload a reference thumbnail for custom style.");
+      $("status").textContent = "Reading style from reference…";
+      style = await describeRef(f);
+    }
+  } catch (e) { $("status").textContent = e.message; $("go").disabled = false; return; }
+
+  $("status").textContent = "Generating " + n + " thumbnails… (each image loads as it finishes)";
+  $("grid").innerHTML = "";
+  const hook = $("hook").value.trim();
+  const textPart = hook
+    ? `The thumbnail prominently displays the text "${hook}" exactly as written, integrated in the style's typical typography.`
+    : "No text, no words, no letters anywhere in the image.";
+  const prompt = `YouTube thumbnail, 16:9: ${topic}. Style: ${style}. ${textPart} Bold single focal point, high contrast, no watermark.`;
+  let left = n;
+  for (let i = 0; i < n; i++) {
+    const seed = Math.floor(Math.random() * 1e6);
+    const url = `https://gen.pollinations.ai/image/${encodeURIComponent(prompt)}?width=1280&height=720&seed=${seed}&model=${MODEL}&key=${API_KEY}`;
+    const fig = document.createElement("figure");
+    fig.innerHTML = `<img src="${url}" alt="thumbnail ${i+1}"><a href="${url}" download="thumb-${seed}.jpg" target="_blank">Open / save ↓</a>`;
+    fig.querySelector("img").onload = fig.querySelector("img").onerror =
+      () => { if (--left === 0) { $("status").textContent = "Done."; $("go").disabled = false; } };
+    $("grid").appendChild(fig);
+  }
+}
+$("go").onclick = go;
+</script>
