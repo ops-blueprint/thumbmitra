@@ -43,7 +43,7 @@
 
 <script>
 // Publishable key (pk_...) from enter.pollinations.ai — safe in client-side code per their docs.
-const API_KEY = "sk_QLEUiwvrqFwAGmvFhWUfX1D0bUNqjioM";
+const API_KEY = "pk_PASTE_YOURS_HERE";
 
 // Model for generation. // ponytail: switch to "nanobanana" or "seedream" if flux garbles the text.
 const MODEL = "flux";
@@ -85,7 +85,6 @@ async function go() {
   const topic = $("topic").value.trim();
   const n = Math.max(3, parseInt($("count").value) || 3); // at least 3
   if (!topic) return $("status").textContent = "Enter a video title or topic first.";
-  if (API_KEY.includes("PASTE")) return $("status").textContent = "Paste your pk_ key into API_KEY at the top of this file (free at enter.pollinations.ai).";
   $("go").disabled = true;
 
   let style = STYLES[sel.value];
@@ -93,6 +92,7 @@ async function go() {
     if (style === null) {
       const f = $("ref").files[0];
       if (!f) throw new Error("Upload a reference thumbnail for custom style.");
+      if (API_KEY.includes("PASTE")) throw new Error("Custom style needs a pk_ key pasted into API_KEY (free at enter.pollinations.ai). Or pick a preset style instead — those are free.");
       $("status").textContent = "Reading style from reference…";
       style = await describeRef(f);
     }
@@ -108,7 +108,8 @@ async function go() {
   let left = n;
   for (let i = 0; i < n; i++) {
     const seed = Math.floor(Math.random() * 1e6);
-    const url = `https://gen.pollinations.ai/image/${encodeURIComponent(prompt)}?width=1280&height=720&seed=${seed}&model=${MODEL}&key=${API_KEY}`;
+    const keyParam = API_KEY.includes("PASTE") ? "" : `&key=${API_KEY}`;
+    const url = `https://gen.pollinations.ai/image/${encodeURIComponent(prompt)}?width=1280&height=720&seed=${seed}&model=${MODEL}${keyParam}`;
     const fig = document.createElement("figure");
     fig.innerHTML = `<img src="${url}" alt="thumbnail ${i+1}"><a href="${url}" download="thumb-${seed}.jpg" target="_blank">Open / save ↓</a>`;
     fig.querySelector("img").onload = fig.querySelector("img").onerror =
